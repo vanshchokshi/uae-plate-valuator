@@ -43,7 +43,7 @@ EMIRATE_MULTIPLIERS = {
     "umm al quwain": 0.50,
 }
 
-CAR_BADGES = {"911", "488", "720", "812", "300", "500", "63", "55", "718", "918"}
+CAR_BADGES = {"911", "488", "720", "812", "300", "500", "63", "55", "718", "918", "296", "800", "700"}
 
 HISTORICAL_AUCTION_RECORDS = {
     ("dubai", 1): [
@@ -93,32 +93,48 @@ def extract_patterns(num_str: str) -> tuple[list[str], float]:
     multiplier = 1.0
     length = len(num_str)
 
+    # 1. Cultural and National Landmarks
+    if num_str == "786":
+        patterns.append("Cultural Premium (786)")
+        multiplier *= 4.5
+    elif num_str == "1971":
+        patterns.append("National Year (1971)")
+        multiplier *= 8.0
+    elif num_str == "2020":
+        patterns.append("Expo Year (2020)")
+        multiplier *= 3.0
+
+    # 2. Mathematical Patterns
     if len(set(num_str)) == 1:
         patterns.append("Solid Repeater")
-        multiplier *= 5.0
+        multiplier *= 6.0
     elif num_str in "0123456789" or num_str in "9876543210":
-        patterns.append("Sequential")
+        patterns.append("Sequential Sequence")
+        multiplier *= 3.5
+    elif length in [4, 5] and num_str == (num_str[:2] * 3)[:length]:
+        patterns.append("Alternating Binary")
         multiplier *= 3.0
     elif num_str == num_str[::-1] and length > 2:
-        patterns.append("Palindrome")
-        multiplier *= 2.0
+        patterns.append("Radar / Palindrome")
+        multiplier *= 2.3
     elif length == 4 and num_str[:2] == num_str[2:]:
-        patterns.append("Repeating Pair")
-        multiplier *= 2.5
-    elif length == 5 and (num_str[:2] * 2 == num_str[:4] or num_str[1:3] == num_str[3:]):
-        patterns.append("Patterned Pair")
-        multiplier *= 1.8
-    elif num_str[1:] == "0" * (length - 1):
-        patterns.append("Round Base")
+        patterns.append("Repeating Pair (ABAB)")
+        multiplier *= 2.8
+    elif length == 4 and (num_str[1:] == num_str[1] * 3 or num_str[:3] == num_str[0] * 3):
+        patterns.append("Bookend Triplet")
         multiplier *= 2.2
+    elif num_str[1:] == "0" * (length - 1):
+        patterns.append("Clean Round Base")
+        multiplier *= 2.5
 
+    # 3. Model and Sub-cultural Badges
     if num_str in CAR_BADGES:
         patterns.append("Automotive Model Match")
-        multiplier *= 1.7
+        multiplier *= 2.0
 
-    if "71" in num_str or num_str == "50":
+    if ("71" in num_str or num_str == "50") and "National Year (1971)" not in patterns:
         patterns.append("National Match")
-        multiplier *= 1.3
+        multiplier *= 1.35
 
     return patterns, multiplier
 
@@ -131,49 +147,56 @@ def evaluate_plate(payload: PlateRequest):
     if not num.isdigit() or not (1 <= len(num) <= 5):
         raise HTTPException(status_code=400, detail="Plate number must be between 1 and 5 digits.")
 
+    # Code-level pricing calculations
     if emirate_clean == "abu dhabi":
         if not raw_code.isdigit():
-            raise HTTPException(status_code=400, detail="Abu Dhabi plates require a numeric Category (e.g. 1, 4, 50).")
+            raise HTTPException(status_code=400, detail="Abu Dhabi plates require a numeric Category.")
         category_num = int(raw_code)
         if category_num == 1:
-            code_multiplier = 1.75
+            code_multiplier = 1.85
         elif category_num in {2, 3, 4}:
-            code_multiplier = 1.25
+            code_multiplier = 1.30
         elif category_num == 50:
-            code_multiplier = 1.35
+            code_multiplier = 1.40
         else:
             code_multiplier = 1.0
         display_code = f"CAT {raw_code}"
     else:
         if not raw_code.isalpha() or not (1 <= len(raw_code) <= 2):
             raise HTTPException(status_code=400, detail=f"{payload.emirate} requires 1 or 2 letter codes.")
-        code_multiplier = 1.20 if len(raw_code) == 1 else 1.0
+        
+        # Single-letter and double-letter matching premiums
+        if len(raw_code) == 1:
+            code_multiplier = 1.30
+        elif len(raw_code) == 2 and raw_code[0] == raw_code[1]:
+            code_multiplier = 1.45  # Matching pair (e.g., AA, RR, SS)
+        else:
+            code_multiplier = 1.0
         display_code = raw_code
 
     emirate_factor = EMIRATE_MULTIPLIERS.get(emirate_clean, 1.0)
     length = len(num)
     patterns, pattern_multiplier = extract_patterns(num)
 
-    # Market reality calibration
+    # Base pricing model
     if length == 1:
-        base_val = 14_000_000
+        base_val = 15_000_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     elif length == 2:
-        base_val = 1_100_000
+        base_val = 1_150_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     elif length == 3:
-        base_val = 180_000
+        base_val = 190_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     elif length == 4:
-        base_val = 4_500  # Standard random 4-digit market base
+        # Standard unpatterned 4-digits trade at standard entry baseline
+        base_val = 5_000 if not patterns else 18_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     else:  # 5 digits
         if not patterns:
-            # Standard issue: zero aftermarket tradeable premium
             calculated_fair = 0
         else:
-            # Only patterned 5-digit plates trade at a premium
-            base_val = 8_000
+            base_val = 12_000
             calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
 
     if calculated_fair == 0:
@@ -185,7 +208,7 @@ def evaluate_plate(payload: PlateRequest):
         liquidation = int(calculated_fair * 0.78)
         dealer_ask = int(calculated_fair * 1.25)
         display_patterns = patterns if patterns else ["Standard Baseline Sequence"]
-        confidence = 0.92 if patterns else 0.85
+        confidence = 0.93 if patterns else 0.82
 
     matched_comps = [
         AuctionComp(**c)
