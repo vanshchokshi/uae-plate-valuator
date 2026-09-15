@@ -43,41 +43,48 @@ EMIRATE_MULTIPLIERS = {
     "umm al quwain": 0.50,
 }
 
-BASE_BENCHMARKS = {
-    1: 14_500_000,
-    2: 1_250_000,
-    3: 320_000,
-    4: 60_000,
-    5: 12_500,
-}
-
 CAR_BADGES = {"911", "488", "720", "812", "300", "500", "63", "55", "718", "918"}
 
 HISTORICAL_AUCTION_RECORDS = {
-    1: [
+    ("dubai", 1): [
         {"plate": "DUBAI P 7", "price_aed": 55_000_000, "date": "Apr 2023", "source": "Most Noble Numbers"},
         {"plate": "DUBAI AA 9", "price_aed": 38_000_000, "date": "Apr 2021", "source": "Most Noble Numbers"},
-        {"plate": "ABU DHABI 2", "price_aed": 23_300_000, "date": "Nov 2021", "source": "Emirates Auction"},
     ],
-    2: [
+    ("dubai", 2): [
         {"plate": "DUBAI AA 70", "price_aed": 3_820_000, "date": "May 2022", "source": "RTA Auction 110"},
         {"plate": "DUBAI V 99", "price_aed": 4_100_000, "date": "Dec 2023", "source": "RTA Auction 114"},
-        {"plate": "ABU DHABI CAT 1 77", "price_aed": 9_150_000, "date": "Jun 2023", "source": "Emirates Auction"},
     ],
-    3: [
+    ("dubai", 3): [
         {"plate": "DUBAI W 333", "price_aed": 720_000, "date": "Mar 2023", "source": "RTA Auction 112"},
         {"plate": "DUBAI Q 777", "price_aed": 850_000, "date": "Oct 2023", "source": "RTA Auction 113"},
-        {"plate": "SHARJAH 111", "price_aed": 610_000, "date": "Jan 2024", "source": "Sharjah Police Auction"},
     ],
-    4: [
+    ("dubai", 4): [
         {"plate": "DUBAI X 1000", "price_aed": 195_000, "date": "Feb 2024", "source": "RTA Online Auction"},
-        {"plate": "ABU DHABI CAT 50 7777", "price_aed": 260_000, "date": "Nov 2023", "source": "Emirates Auction"},
         {"plate": "DUBAI Z 9999", "price_aed": 210_000, "date": "Dec 2023", "source": "RTA Online Auction"},
     ],
-    5: [
+    ("dubai", 5): [
         {"plate": "DUBAI O 11111", "price_aed": 140_000, "date": "Jan 2024", "source": "RTA Online Auction"},
         {"plate": "DUBAI S 50000", "price_aed": 75_000, "date": "Mar 2024", "source": "RTA Online Auction"},
+    ],
+    ("abu dhabi", 1): [
+        {"plate": "ABU DHABI 2", "price_aed": 23_300_000, "date": "Nov 2021", "source": "Emirates Auction"},
+        {"plate": "ABU DHABI 5", "price_aed": 25_200_000, "date": "Nov 2020", "source": "Emirates Auction"},
+    ],
+    ("abu dhabi", 2): [
+        {"plate": "ABU DHABI CAT 1 77", "price_aed": 9_150_000, "date": "Jun 2023", "source": "Emirates Auction"},
+        {"plate": "ABU DHABI CAT 50 11", "price_aed": 4_600_000, "date": "Dec 2022", "source": "Emirates Auction"},
+    ],
+    ("abu dhabi", 3): [
+        {"plate": "ABU DHABI CAT 1 111", "price_aed": 1_100_000, "date": "Mar 2023", "source": "Emirates Auction"},
+        {"plate": "ABU DHABI CAT 4 500", "price_aed": 340_000, "date": "Oct 2023", "source": "Emirates Auction"},
+    ],
+    ("abu dhabi", 4): [
+        {"plate": "ABU DHABI CAT 50 7777", "price_aed": 260_000, "date": "Nov 2023", "source": "Emirates Auction"},
+        {"plate": "ABU DHABI CAT 1 1234", "price_aed": 180_000, "date": "Jan 2024", "source": "Emirates Auction"},
+    ],
+    ("abu dhabi", 5): [
         {"plate": "ABU DHABI CAT 1 98989", "price_aed": 92_000, "date": "Feb 2024", "source": "Emirates Auction"},
+        {"plate": "ABU DHABI CAT 50 55555", "price_aed": 165_000, "date": "May 2023", "source": "Emirates Auction"},
     ],
 }
 
@@ -88,26 +95,29 @@ def extract_patterns(num_str: str) -> tuple[list[str], float]:
 
     if len(set(num_str)) == 1:
         patterns.append("Solid Repeater")
-        multiplier *= 3.8
+        multiplier *= 5.0
     elif num_str in "0123456789" or num_str in "9876543210":
         patterns.append("Sequential")
-        multiplier *= 2.4
+        multiplier *= 3.0
     elif num_str == num_str[::-1] and length > 2:
         patterns.append("Palindrome")
-        multiplier *= 1.7
+        multiplier *= 2.0
     elif length == 4 and num_str[:2] == num_str[2:]:
         patterns.append("Repeating Pair")
-        multiplier *= 2.0
+        multiplier *= 2.5
+    elif length == 5 and (num_str[:2] * 2 == num_str[:4] or num_str[1:3] == num_str[3:]):
+        patterns.append("Patterned Pair")
+        multiplier *= 1.8
     elif num_str[1:] == "0" * (length - 1):
         patterns.append("Round Base")
-        multiplier *= 1.6
+        multiplier *= 2.2
 
     if num_str in CAR_BADGES:
         patterns.append("Automotive Model Match")
-        multiplier *= 1.5
+        multiplier *= 1.7
 
     if "71" in num_str or num_str == "50":
-        patterns.append("National Year Match")
+        patterns.append("National Match")
         multiplier *= 1.3
 
     return patterns, multiplier
@@ -137,33 +147,58 @@ def evaluate_plate(payload: PlateRequest):
     else:
         if not raw_code.isalpha() or not (1 <= len(raw_code) <= 2):
             raise HTTPException(status_code=400, detail=f"{payload.emirate} requires 1 or 2 letter codes.")
-        code_multiplier = 1.15 if len(raw_code) == 1 else 1.0
+        code_multiplier = 1.20 if len(raw_code) == 1 else 1.0
         display_code = raw_code
 
     emirate_factor = EMIRATE_MULTIPLIERS.get(emirate_clean, 1.0)
     length = len(num)
-    base_val = BASE_BENCHMARKS.get(length, 10_000)
-
     patterns, pattern_multiplier = extract_patterns(num)
-    calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+
+    # Market reality calibration
+    if length == 1:
+        base_val = 14_000_000
+        calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+    elif length == 2:
+        base_val = 1_100_000
+        calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+    elif length == 3:
+        base_val = 180_000
+        calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+    elif length == 4:
+        base_val = 4_500  # Standard random 4-digit market base
+        calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+    else:  # 5 digits
+        if not patterns:
+            # Standard issue: zero aftermarket tradeable premium
+            calculated_fair = 0
+        else:
+            # Only patterned 5-digit plates trade at a premium
+            base_val = 8_000
+            calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
+
+    if calculated_fair == 0:
+        liquidation = 0
+        dealer_ask = 0
+        display_patterns = ["Standard Issue (No Market Premium)"]
+        confidence = 0.99
+    else:
+        liquidation = int(calculated_fair * 0.78)
+        dealer_ask = int(calculated_fair * 1.25)
+        display_patterns = patterns if patterns else ["Standard Baseline Sequence"]
+        confidence = 0.92 if patterns else 0.85
 
     matched_comps = [
-        AuctionComp(
-            plate=c["plate"],
-            price_aed=c["price_aed"],
-            date=c["date"],
-            source=c["source"]
-        )
-        for c in HISTORICAL_AUCTION_RECORDS.get(length, [])
+        AuctionComp(**c)
+        for c in HISTORICAL_AUCTION_RECORDS.get((emirate_clean, length), [])
     ]
 
     return PlateResponse(
         plate_display=f"{payload.emirate.upper()} {display_code} {num}",
         digit_count=length,
-        patterns=patterns if patterns else ["Standard Sequence"],
-        liquidation_value_aed=int(calculated_fair * 0.78),
+        patterns=display_patterns,
+        liquidation_value_aed=liquidation,
         fair_market_value_aed=calculated_fair,
-        dealer_ask_aed=int(calculated_fair * 1.25),
-        confidence_score=0.94 if patterns else 0.80,
+        dealer_ask_aed=dealer_ask,
+        confidence_score=confidence,
         comps=matched_comps,
     )
