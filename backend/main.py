@@ -1,8 +1,85 @@
-﻿from fastapi import FastAPI, HTTPException
+﻿import sqlite3
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="UAE Plate Valuation Engine")
+DB_FILE = "auctions.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS auction_comps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            emirate TEXT NOT NULL,
+            digit_count INTEGER NOT NULL,
+            plate TEXT NOT NULL,
+            price_aed INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            source TEXT NOT NULL
+        )
+    """)
+    
+    cursor.execute("SELECT COUNT(*) FROM auction_comps")
+    if cursor.fetchone()[0] == 0:
+        seed_data = [
+            # Dubai 1-digit
+            ("dubai", 1, "DUBAI P 7", 55000000, "Apr 2023", "Most Noble Numbers"),
+            ("dubai", 1, "DUBAI AA 9", 38000000, "Apr 2021", "Most Noble Numbers"),
+            ("dubai", 1, "DUBAI AA 8", 35000000, "Apr 2022", "Most Noble Numbers"),
+            # Abu Dhabi 1-digit
+            ("abu dhabi", 1, "ABU DHABI 2", 23300000, "Nov 2021", "Emirates Auction"),
+            ("abu dhabi", 1, "ABU DHABI 5", 25200000, "Nov 2020", "Emirates Auction"),
+            # Dubai 2-digit
+            ("dubai", 2, "DUBAI AA 70", 3820000, "May 2022", "RTA Auction 110"),
+            ("dubai", 2, "DUBAI V 99", 4100000, "Dec 2023", "RTA Auction 114"),
+            ("dubai", 2, "DUBAI W 12", 2700000, "Sep 2023", "RTA Auction 113"),
+            # Abu Dhabi 2-digit
+            ("abu dhabi", 2, "ABU DHABI CAT 1 77", 9150000, "Jun 2023", "Emirates Auction"),
+            ("abu dhabi", 2, "ABU DHABI CAT 50 11", 4600000, "Dec 2022", "Emirates Auction"),
+            ("abu dhabi", 2, "ABU DHABI CAT 4 22", 3100000, "Feb 2024", "Emirates Auction"),
+            # Dubai 3-digit
+            ("dubai", 3, "DUBAI W 333", 720000, "Mar 2023", "RTA Auction 112"),
+            ("dubai", 3, "DUBAI Q 777", 850000, "Oct 2023", "RTA Auction 113"),
+            ("dubai", 3, "DUBAI J 1971", 1250000, "Nov 2022", "RTA Auction 111"),
+            ("dubai", 3, "DUBAI Z 786", 620000, "Jan 2024", "RTA Special Auction"),
+            # Abu Dhabi 3-digit
+            ("abu dhabi", 3, "ABU DHABI CAT 1 111", 1100000, "Mar 2023", "Emirates Auction"),
+            ("abu dhabi", 3, "ABU DHABI CAT 4 500", 340000, "Oct 2023", "Emirates Auction"),
+            ("abu dhabi", 3, "ABU DHABI CAT 50 999", 780000, "Dec 2023", "Emirates Auction"),
+            # Dubai 4-digit
+            ("dubai", 4, "DUBAI X 1000", 195000, "Feb 2024", "RTA Online Auction"),
+            ("dubai", 4, "DUBAI Z 9999", 210000, "Dec 2023", "RTA Online Auction"),
+            ("dubai", 4, "DUBAI AA 1212", 185000, "Jan 2024", "RTA Online Auction"),
+            ("dubai", 4, "DUBAI K 45892", 5200, "Mar 2024", "Dubizzle Verified"),
+            # Abu Dhabi 4-digit
+            ("abu dhabi", 4, "ABU DHABI CAT 50 7777", 260000, "Nov 2023", "Emirates Auction"),
+            ("abu dhabi", 4, "ABU DHABI CAT 1 1234", 180000, "Jan 2024", "Emirates Auction"),
+            ("abu dhabi", 4, "ABU DHABI CAT 4 8080", 95000, "Feb 2024", "Emirates Auction"),
+            # Dubai 5-digit
+            ("dubai", 5, "DUBAI O 11111", 140000, "Jan 2024", "RTA Online Auction"),
+            ("dubai", 5, "DUBAI S 50000", 75000, "Mar 2024", "RTA Online Auction"),
+            ("dubai", 5, "DUBAI R 91191", 42000, "Feb 2024", "RTA Online Auction"),
+            # Abu Dhabi 5-digit
+            ("abu dhabi", 5, "ABU DHABI CAT 50 55555", 165000, "May 2023", "Emirates Auction"),
+            ("abu dhabi", 5, "ABU DHABI CAT 1 98989", 92000, "Feb 2024", "Emirates Auction"),
+            ("abu dhabi", 5, "ABU DHABI CAT 4 10000", 85000, "Dec 2023", "Emirates Auction"),
+        ]
+        cursor.executemany(
+            "INSERT INTO auction_comps (emirate, digit_count, plate, price_aed, date, source) VALUES (?, ?, ?, ?, ?, ?)",
+            seed_data
+        )
+        conn.commit()
+    conn.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(title="UAE Plate Valuation Engine", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,55 +122,11 @@ EMIRATE_MULTIPLIERS = {
 
 CAR_BADGES = {"911", "488", "720", "812", "300", "500", "63", "55", "718", "918", "296", "800", "700"}
 
-HISTORICAL_AUCTION_RECORDS = {
-    ("dubai", 1): [
-        {"plate": "DUBAI P 7", "price_aed": 55_000_000, "date": "Apr 2023", "source": "Most Noble Numbers"},
-        {"plate": "DUBAI AA 9", "price_aed": 38_000_000, "date": "Apr 2021", "source": "Most Noble Numbers"},
-    ],
-    ("dubai", 2): [
-        {"plate": "DUBAI AA 70", "price_aed": 3_820_000, "date": "May 2022", "source": "RTA Auction 110"},
-        {"plate": "DUBAI V 99", "price_aed": 4_100_000, "date": "Dec 2023", "source": "RTA Auction 114"},
-    ],
-    ("dubai", 3): [
-        {"plate": "DUBAI W 333", "price_aed": 720_000, "date": "Mar 2023", "source": "RTA Auction 112"},
-        {"plate": "DUBAI Q 777", "price_aed": 850_000, "date": "Oct 2023", "source": "RTA Auction 113"},
-    ],
-    ("dubai", 4): [
-        {"plate": "DUBAI X 1000", "price_aed": 195_000, "date": "Feb 2024", "source": "RTA Online Auction"},
-        {"plate": "DUBAI Z 9999", "price_aed": 210_000, "date": "Dec 2023", "source": "RTA Online Auction"},
-    ],
-    ("dubai", 5): [
-        {"plate": "DUBAI O 11111", "price_aed": 140_000, "date": "Jan 2024", "source": "RTA Online Auction"},
-        {"plate": "DUBAI S 50000", "price_aed": 75_000, "date": "Mar 2024", "source": "RTA Online Auction"},
-    ],
-    ("abu dhabi", 1): [
-        {"plate": "ABU DHABI 2", "price_aed": 23_300_000, "date": "Nov 2021", "source": "Emirates Auction"},
-        {"plate": "ABU DHABI 5", "price_aed": 25_200_000, "date": "Nov 2020", "source": "Emirates Auction"},
-    ],
-    ("abu dhabi", 2): [
-        {"plate": "ABU DHABI CAT 1 77", "price_aed": 9_150_000, "date": "Jun 2023", "source": "Emirates Auction"},
-        {"plate": "ABU DHABI CAT 50 11", "price_aed": 4_600_000, "date": "Dec 2022", "source": "Emirates Auction"},
-    ],
-    ("abu dhabi", 3): [
-        {"plate": "ABU DHABI CAT 1 111", "price_aed": 1_100_000, "date": "Mar 2023", "source": "Emirates Auction"},
-        {"plate": "ABU DHABI CAT 4 500", "price_aed": 340_000, "date": "Oct 2023", "source": "Emirates Auction"},
-    ],
-    ("abu dhabi", 4): [
-        {"plate": "ABU DHABI CAT 50 7777", "price_aed": 260_000, "date": "Nov 2023", "source": "Emirates Auction"},
-        {"plate": "ABU DHABI CAT 1 1234", "price_aed": 180_000, "date": "Jan 2024", "source": "Emirates Auction"},
-    ],
-    ("abu dhabi", 5): [
-        {"plate": "ABU DHABI CAT 1 98989", "price_aed": 92_000, "date": "Feb 2024", "source": "Emirates Auction"},
-        {"plate": "ABU DHABI CAT 50 55555", "price_aed": 165_000, "date": "May 2023", "source": "Emirates Auction"},
-    ],
-}
-
 def extract_patterns(num_str: str) -> tuple[list[str], float]:
     patterns = []
     multiplier = 1.0
     length = len(num_str)
 
-    # 1. Cultural and National Landmarks
     if num_str == "786":
         patterns.append("Cultural Premium (786)")
         multiplier *= 4.5
@@ -104,7 +137,6 @@ def extract_patterns(num_str: str) -> tuple[list[str], float]:
         patterns.append("Expo Year (2020)")
         multiplier *= 3.0
 
-    # 2. Mathematical Patterns
     if len(set(num_str)) == 1:
         patterns.append("Solid Repeater")
         multiplier *= 6.0
@@ -127,7 +159,6 @@ def extract_patterns(num_str: str) -> tuple[list[str], float]:
         patterns.append("Clean Round Base")
         multiplier *= 2.5
 
-    # 3. Model and Sub-cultural Badges
     if num_str in CAR_BADGES:
         patterns.append("Automotive Model Match")
         multiplier *= 2.0
@@ -138,6 +169,38 @@ def extract_patterns(num_str: str) -> tuple[list[str], float]:
 
     return patterns, multiplier
 
+def fetch_nearest_comps(emirate: str, length: int, target_price: int, limit: int = 3) -> list[AuctionComp]:
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT plate, price_aed, date, source
+        FROM auction_comps
+        WHERE emirate = ? AND digit_count = ?
+        ORDER BY ABS(price_aed - ?) ASC
+        LIMIT ?
+    """, (emirate, length, target_price, limit))
+    
+    rows = cursor.fetchall()
+    
+    # Fallback to emirate match alone if no digit matches exist
+    if not rows:
+        cursor.execute("""
+            SELECT plate, price_aed, date, source
+            FROM auction_comps
+            WHERE emirate = ?
+            ORDER BY ABS(price_aed - ?) ASC
+            LIMIT ?
+        """, (emirate, target_price, limit))
+        rows = cursor.fetchall()
+        
+    conn.close()
+    
+    return [
+        AuctionComp(plate=r[0], price_aed=r[1], date=r[2], source=r[3])
+        for r in rows
+    ]
+
 @app.post("/v1/evaluate", response_model=PlateResponse)
 def evaluate_plate(payload: PlateRequest):
     num = payload.number.strip()
@@ -147,7 +210,6 @@ def evaluate_plate(payload: PlateRequest):
     if not num.isdigit() or not (1 <= len(num) <= 5):
         raise HTTPException(status_code=400, detail="Plate number must be between 1 and 5 digits.")
 
-    # Code-level pricing calculations
     if emirate_clean == "abu dhabi":
         if not raw_code.isdigit():
             raise HTTPException(status_code=400, detail="Abu Dhabi plates require a numeric Category.")
@@ -165,11 +227,10 @@ def evaluate_plate(payload: PlateRequest):
         if not raw_code.isalpha() or not (1 <= len(raw_code) <= 2):
             raise HTTPException(status_code=400, detail=f"{payload.emirate} requires 1 or 2 letter codes.")
         
-        # Single-letter and double-letter matching premiums
         if len(raw_code) == 1:
             code_multiplier = 1.30
         elif len(raw_code) == 2 and raw_code[0] == raw_code[1]:
-            code_multiplier = 1.45  # Matching pair (e.g., AA, RR, SS)
+            code_multiplier = 1.45
         else:
             code_multiplier = 1.0
         display_code = raw_code
@@ -178,7 +239,6 @@ def evaluate_plate(payload: PlateRequest):
     length = len(num)
     patterns, pattern_multiplier = extract_patterns(num)
 
-    # Base pricing model
     if length == 1:
         base_val = 15_000_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
@@ -189,7 +249,6 @@ def evaluate_plate(payload: PlateRequest):
         base_val = 190_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     elif length == 4:
-        # Standard unpatterned 4-digits trade at standard entry baseline
         base_val = 5_000 if not patterns else 18_000
         calculated_fair = int(base_val * emirate_factor * pattern_multiplier * code_multiplier)
     else:  # 5 digits
@@ -210,10 +269,7 @@ def evaluate_plate(payload: PlateRequest):
         display_patterns = patterns if patterns else ["Standard Baseline Sequence"]
         confidence = 0.93 if patterns else 0.82
 
-    matched_comps = [
-        AuctionComp(**c)
-        for c in HISTORICAL_AUCTION_RECORDS.get((emirate_clean, length), [])
-    ]
+    matched_comps = fetch_nearest_comps(emirate_clean, length, calculated_fair, limit=3)
 
     return PlateResponse(
         plate_display=f"{payload.emirate.upper()} {display_code} {num}",
