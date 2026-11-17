@@ -1,5 +1,7 @@
 import pytest
 from valuation import valuate, extract_patterns, calculate_code_multiplier, calculate_base_value
+from inflation import adjust_comp_for_appreciation, parse_year_from_date
+from ml_engine import ml_engine, extract_ml_features
 
 def test_single_digit_base():
     result = valuate("dubai", "A", "7")
@@ -55,3 +57,20 @@ def test_exact_comp_precedence():
     assert result["fair_market_value_aed"] == 55_000_000
     assert "Exact Auction Comp Verified" in result["patterns"]
     assert result["confidence_score"] == 0.99
+
+def test_inflation_appreciation_adjustment():
+    adj = adjust_comp_for_appreciation(price_aed=1_000_000, date_str="Apr 2021", digit_count=2)
+    assert adj["sale_year"] == 2021
+    assert adj["elapsed_years"] == 5  # 2026 - 2021
+    assert adj["adjusted_price_aed"] > 1_000_000  # Positive appreciation
+    assert adj["appreciation_pct"] > 30.0
+
+def test_ml_engine_features_and_prediction():
+    feats = extract_ml_features("dubai", "AA", "777", 1_000_000)
+    assert len(feats) == 16
+    assert feats[0] == 3.0  # digit_count
+    
+    pred = ml_engine.predict_valuation("dubai", "AA", "777", 1_000_000)
+    assert "ml_adjusted_price" in pred
+    assert pred["ml_adjusted_price"] > 0
+    assert "ml_confidence_r2" in pred

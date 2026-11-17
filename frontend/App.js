@@ -260,10 +260,17 @@ export default function App() {
         <View style={styles.valResultCard}>
           <View style={styles.resultHeader}>
             <Text style={styles.resultPlateDisplay}>{valuationResult.plate_display}</Text>
-            <View style={styles.confidenceBadge}>
-              <Text style={styles.confidenceText}>
-                {Math.round(valuationResult.confidence_score * 100)}% CONFIDENCE
-              </Text>
+            <View style={styles.headerBadgesRow}>
+              <View style={styles.confidenceBadge}>
+                <Text style={styles.confidenceText}>
+                  {Math.round(valuationResult.confidence_score * 100)}% CONFIDENCE
+                </Text>
+              </View>
+              {valuationResult.ml_enhanced && (
+                <View style={styles.mlBadge}>
+                  <Text style={styles.mlBadgeText}>ML TUNED</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -286,7 +293,9 @@ export default function App() {
 
           {/* Primary Hero Valuation: Fair Market Value */}
           <View style={styles.heroPriceContainer}>
-            <Text style={styles.heroPriceLabel}>FAIR MARKET VALUE</Text>
+            <Text style={styles.heroPriceLabel}>
+              FAIR MARKET VALUE {valuationResult.appreciation_adjusted ? "(2026 INDEXED)" : ""}
+            </Text>
             <Text style={styles.heroPriceValue}>
               <Text style={styles.currency}>AED </Text>
               {formatAED(valuationResult.fair_market_value_aed)}
@@ -315,14 +324,22 @@ export default function App() {
             <Text style={styles.whatsAppButtonText}>INQUIRE / BROKER THIS PLATE</Text>
           </TouchableOpacity>
 
-          {/* Nearest Historical Comps Preview */}
+          {/* Nearest Historical Comps with 2026 Market Indexing */}
           {valuationResult.comps && valuationResult.comps.length > 0 && (
             <View style={styles.miniCompsContainer}>
-              <Text style={styles.miniCompsHeader}>VERIFIED BENCHMARK COMPS</Text>
+              <Text style={styles.miniCompsHeader}>VERIFIED BENCHMARK COMPS (2026 INDEXED)</Text>
               {valuationResult.comps.map((c, i) => (
                 <View key={i} style={styles.miniCompRow}>
-                  <Text style={styles.miniCompPlate}>{c.plate}</Text>
-                  <Text style={styles.miniCompPrice}>AED {formatAED(c.price_aed)}</Text>
+                  <View style={styles.miniCompLeft}>
+                    <Text style={styles.miniCompPlate}>{c.plate}</Text>
+                    <Text style={styles.miniCompSubtext}>{c.source} ({c.date})</Text>
+                  </View>
+                  <View style={styles.miniCompRight}>
+                    <Text style={styles.miniCompPrice}>AED {formatAED(c.adjusted_price_aed || c.price_aed)}</Text>
+                    {c.appreciation_pct > 0 && (
+                      <Text style={styles.miniCompAppreciation}>+{c.appreciation_pct}% since {c.sale_year}</Text>
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
@@ -547,6 +564,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 2,
   },
+  headerBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   confidenceBadge: {
     backgroundColor: '#1A1810',
     borderColor: '#E5A93C',
@@ -557,6 +579,20 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     color: '#E5A93C',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  mlBadge: {
+    backgroundColor: '#0F1A2A',
+    borderColor: '#3B82F6',
+    borderWidth: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  mlBadgeText: {
+    color: '#60A5FA',
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -684,17 +720,38 @@ const styles = StyleSheet.create({
   miniCompRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderColor: '#181818',
+  },
+  miniCompLeft: {
+    flex: 0.55,
+  },
+  miniCompRight: {
+    flex: 0.45,
+    alignItems: 'flex-end',
   },
   miniCompPlate: {
-    color: '#AAA',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  miniCompPrice: {
     color: '#FFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  miniCompSubtext: {
+    color: '#666',
+    fontSize: 9,
+    marginTop: 2,
+  },
+  miniCompPrice: {
+    color: '#E5A93C',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  miniCompAppreciation: {
+    color: '#25D366',
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 1,
   },
 
   // Recent Searches Pills

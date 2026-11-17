@@ -48,6 +48,8 @@ def test_evaluate_post():
     assert data["liquidation_value_aed"] < data["fair_market_value_aed"]
     assert data["dealer_ask_aed"] > data["fair_market_value_aed"]
     assert len(data["comps"]) > 0
+    assert data["ml_enhanced"] is True
+    assert "adjusted_price_aed" in data["comps"][0]
 
 def test_evaluate_with_check_live_flag():
     payload = {
