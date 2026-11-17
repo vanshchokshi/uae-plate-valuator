@@ -1,9 +1,8 @@
 """
 Autonomous Scraper for Emirates Auction Live Inventory
-Extracts live plate auction listings and persists into the comps database.
+Extracts live plate auction listings and persists directly into the SQLite comps database.
 """
 
-import os
 import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright
@@ -46,7 +45,6 @@ def run_scraper():
                         code = match.group(1).upper()
                         num = match.group(2)
                     else:
-                        # Fallback path splitting
                         parts = img_src.split('/')
                         if len(parts) < 2:
                             continue
@@ -55,7 +53,6 @@ def run_scraper():
                         if not num.isdigit():
                             continue
 
-                    # Extract price digits
                     clean_price = re.sub(r'[^\d]', '', price_text)
                     if not clean_price:
                         continue
@@ -72,14 +69,14 @@ def run_scraper():
                         "date": current_date,
                         "source": "Emirates Auction Live"
                     })
-            except Exception as e:
+            except Exception:
                 continue
 
         browser.close()
 
     if comps:
         inserted = db.insert_comps(comps)
-        print(f"Pipeline complete: Scraped {len(comps)} live market comps. Inserted: {inserted}.")
+        print(f"Pipeline complete: Scraped {len(comps)} live market comps. Newly inserted into SQLite: {inserted}. Total in DB: {db.count_comps()}.")
     else:
         print("No market comps found during scan.")
 

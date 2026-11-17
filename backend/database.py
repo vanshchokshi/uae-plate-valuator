@@ -1,14 +1,11 @@
 """
-Database abstraction layer for UAE Plate Valuator.
-Supports Supabase (primary cloud DB) with automatic fallback to local SQLite (auctions.db).
+SQLite Database Layer for UAE Plate Valuator.
+Fast, zero-config, embedded database for historical and live auction comps.
 """
 
 import os
 import sqlite3
 from typing import List, Dict, Any, Optional
-from dotenv import load_dotenv
-
-load_dotenv()
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "auctions.db")
 
@@ -47,7 +44,7 @@ SEED_COMPS = [
 ]
 
 def init_sqlite():
-    """Ensure SQLite DB exists with auction_comps table and curated seed comps."""
+    """Ensure SQLite DB exists with schema, indexes, and curated benchmarks."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
@@ -62,7 +59,11 @@ def init_sqlite():
             UNIQUE(plate, price_aed, date)
         )
     """)
-    # Insert seed comps using INSERT OR IGNORE
+    # Performance indexes for sub-millisecond queries
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_comps_emirate_digits ON auction_comps(emirate, digit_count, price_aed)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_comps_plate ON auction_comps(plate)")
+
+    # Insert initial benchmark comps with INSERT OR IGNORE
     cursor.executemany("""
         INSERT OR IGNORE INTO auction_comps (emirate, digit_count, plate, price_aed, date, source)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -70,46 +71,25 @@ def init_sqlite():
     conn.commit()
     conn.close()
 
-# Initialize local sqlite immediately
+# Initialize immediately
 init_sqlite()
 
 class DatabaseRepository:
     def __init__(self):
-        self.client = None
-        self._supabase_disabled = False
-        self._init_supabase()
+        self.db_file = DB_FILE
 
-    def _init_supabase(self):
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        if url and key and "supabase.co" in url and not url.startswith("https://your-project"):
-            try:
-                from supabase import create_client
-                self.client = create_client(url, key)
-            except Exception as e:
-                print(f"Warning: Failed to initialize Supabase client: {e}")
-                self.client = None
-
-    def get_mode(self) -> str:
-        return "supabase" if (self.client is not None and not self._supabase_disabled) else "sqlite_fallback"
+    def count_comps(self) -> int:
+        """Return total count of comparable plates stored."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM auction_comps")
+        total = cursor.fetchone()[0]
+        conn.close()
+        return total
 
     def get_comps(self, emirate: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fetch auction comps from Supabase or fallback to SQLite."""
-        if self.client is not None and not self._supabase_disabled:
-            try:
-                query = self.client.table("auction_comps").select("*")
-                if emirate:
-                    query = query.eq("emirate", emirate.lower())
-                response = query.order("id", desc=True).limit(limit).execute()
-                if response.data:
-                    return response.data
-            except Exception as e:
-                # Mark as disabled so subsequent calls in the same lifecycle don't stall on DNS/timeout
-                print(f"Supabase query failed ({e}), falling back to SQLite.")
-                self._supabase_disabled = True
-
-        # Fallback to SQLite
-        conn = sqlite3.connect(DB_FILE)
+        """Fetch auction comps from SQLite."""
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
         if emirate:
             cursor.execute("""
@@ -144,15 +124,7 @@ class DatabaseRepository:
 
     def fetch_exact_match(self, plate_display: str) -> Optional[int]:
         """Check for exact historical auction comp for this plate."""
-        if self.client is not None and not self._supabase_disabled:
-            try:
-                response = self.client.table("auction_comps").select("price_aed").eq("plate", plate_display.upper()).limit(1).execute()
-                if response.data:
-                    return response.data[0].get("price_aed")
-            except Exception:
-                pass
-
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
         cursor.execute("SELECT price_aed FROM auction_comps WHERE upper(plate) = ?", (plate_display.upper(),))
         row = cursor.fetchone()
@@ -167,7 +139,7 @@ class DatabaseRepository:
         limit: int = 3
     ) -> List[Dict[str, Any]]:
         """Fetch nearest price comps for comparable digit length in the same or nearby emirate."""
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -205,14 +177,13 @@ class DatabaseRepository:
         ]
 
     def insert_comps(self, comps: List[Dict[str, Any]]) -> int:
-        """Insert scraped or imported comps into both Supabase and SQLite."""
+        """Insert scraped or imported comps into SQLite."""
         if not comps:
             return 0
         
-        # Always persist to SQLite locally
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        inserted_local = 0
+        inserted = 0
         for c in comps:
             try:
                 cursor.execute("""
@@ -220,20 +191,12 @@ class DatabaseRepository:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (c["emirate"], c["digit_count"], c["plate"], c["price_aed"], c["date"], c["source"]))
                 if cursor.rowcount > 0:
-                    inserted_local += 1
+                    inserted += 1
             except Exception:
                 continue
         conn.commit()
         conn.close()
-
-        # If Supabase is available, insert into cloud
-        if self.client is not None and not self._supabase_disabled:
-            try:
-                self.client.table("auction_comps").upsert(comps).execute()
-            except Exception as e:
-                print(f"Supabase upsert warning: {e}")
-
-        return inserted_local
+        return inserted
 
 # Global singleton repository
 db = DatabaseRepository()

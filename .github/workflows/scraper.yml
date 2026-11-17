@@ -6,7 +6,7 @@ on:
   workflow_dispatch:    # Allows manual trigger from GitHub UI
 
 jobs:
-  scrape-and-inject:
+  scrape-and-test:
     runs-on: ubuntu-latest
     
     steps:
@@ -26,9 +26,6 @@ jobs:
           playwright install --with-deps chromium
           
       - name: Execute Pipeline
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           cd backend
           python scraper.py

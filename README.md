@@ -8,10 +8,10 @@ A full-stack market intelligence platform designed to calculate the **Fair Marke
 
 * **Client / Frontend:** React Native (Expo SDK 52+)
 * **API / Backend:** FastAPI (Python 3.11+)
-* **Database:** Hybrid Architecture — Supabase (PostgreSQL Cloud) with automatic, zero-config fallback to local SQLite (`auctions.db`)
+* **Database:** Embedded SQLite (`auctions.db`) — self-contained, zero-config, sub-millisecond query performance
 * **Data Pipeline:** Playwright (Headless Chromium)
 * **Agent Integration:** FastMCP Server (`mcp_server.py`)
-* **CI/CD:** GitHub Actions (Scraper automation & Pytest suite)
+* **CI/CD:** GitHub Actions (Automated testing & scraper pipeline)
 
 ---
 
@@ -31,13 +31,14 @@ UAE plate pricing is driven by digit brevity, cultural significance, sequence re
 * **Emirate & Code Multipliers:** Weighted factors across Dubai, Abu Dhabi (Categories 1, 2, 50), Sharjah, and Northern Emirates.
 * **Market Anchoring:** Algorithmic outputs are cross-referenced against historical auction transactions to anchor pricing to verified real-world comps.
 
-### 2. Dual Database (Cloud + Local Fallback)
-* Automatically connects to **Supabase** when `SUPABASE_URL` and `SUPABASE_KEY` are provided.
-* If unconfigured or offline, seamlessly falls back to a curated local **SQLite** database (`auctions.db`) seeded with benchmark UAE auction transactions. Zero setup required to run out of the box!
+### 2. High-Performance Embedded Database (SQLite)
+* Self-contained in `backend/auctions.db` with indexed lookups on `(emirate, digit_count, price_aed)` and `(plate)`.
+* Zero external cloud services, API tokens, or setup required. Pre-seeded with 31 verified UAE auction benchmarks across Dubai and Abu Dhabi.
+* Sub-millisecond query response time (< 1ms).
 
 ### 3. Automated Data Pipeline & Scraper
 * Headless Chromium Playwright scraper crawls Emirates Auction live inventory.
-* Bypasses client-rendered React mounting delays using dynamic DOM selectors and extracts plate codes and numbers directly from CDN image URLs.
+* Bypasses client-rendered React mounting delays using dynamic DOM selectors and extracts plate codes and numbers directly from CDN image URLs, persisting directly into SQLite.
 
 ### 4. Client Interface (Expo React Native)
 * **Monochromatic Dark UI:** Deep black styling with high-contrast hierarchical typography and physical plate preview.

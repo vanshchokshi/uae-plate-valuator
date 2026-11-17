@@ -1,6 +1,6 @@
 """
 FastMCP Server for UAE Plate Valuator
-Exposes tools for AI agents to evaluate plates and fetch historical market comps.
+Exposes tools for AI agents to evaluate plates and fetch historical market comps from SQLite.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -11,7 +11,7 @@ mcp = FastMCP("PlateValuator")
 
 @mcp.tool()
 def fetch_market_comps(emirate: str = "dubai", limit: int = 20) -> str:
-    """Fetch live license plate auction comps from the comps database."""
+    """Fetch license plate auction comps from the local SQLite database."""
     comps = db.get_comps(emirate=emirate, limit=limit)
     return str(comps)
 

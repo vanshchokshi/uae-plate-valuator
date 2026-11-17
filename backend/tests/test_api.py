@@ -9,7 +9,8 @@ def test_health_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert "database_mode" in data
+    assert data["database"] == "sqlite"
+    assert data["comps_in_db"] > 0
 
 def test_get_comps():
     response = client.get("/comps")

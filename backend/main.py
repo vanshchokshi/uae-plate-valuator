@@ -10,10 +10,10 @@ from database import db
 app = FastAPI(
     title="UAE Plate Valuation Engine",
     description="Fintech-grade valuation engine and market comps intelligence for UAE license plates.",
-    version="2.0.0"
+    version="2.1.0"
 )
 
-# Safe CORS configuration (avoiding wildcard + credentials conflict)
+# Open CORS configuration for Expo mobile and web clients
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,16 +45,17 @@ class PlateResponse(BaseModel):
     dealer_ask_aed: int
     confidence_score: float
     comps: List[AuctionComp]
-    # Backward compatibility field
+    # Backward compatibility fields
     estimated_value: int
     comparable_count: int
 
 @app.get("/health")
 def health_check():
-    """Health status and current database driver (Supabase vs local SQLite fallback)."""
+    """Health check endpoint reporting SQLite database metrics."""
     return {
         "status": "healthy",
-        "database_mode": db.get_mode()
+        "database": "sqlite",
+        "comps_in_db": db.count_comps()
     }
 
 @app.get("/comps")
@@ -66,8 +67,8 @@ def get_comps(
     """Retrieve historical and live auction comparable records."""
     try:
         data = db.get_comps(emirate=emirate, limit=limit)
-        return {"data": data, "count": len(data), "database_mode": db.get_mode()}
-    except Exception as e:
+        return {"data": data, "count": len(data), "database": "sqlite"}
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to retrieve auction comps.")
 
 @app.post("/v1/evaluate", response_model=PlateResponse)
@@ -86,7 +87,7 @@ def evaluate_plate(payload: PlateRequest):
     if not raw_code:
         raise HTTPException(status_code=400, detail="Plate code or category is required.")
 
-    # 1. Check for exact historical auction comp
+    # 1. Check for exact historical auction comp in SQLite
     temp_display = f"{emirate.upper()} {raw_code.upper()} {num}"
     exact_price = db.fetch_exact_match(temp_display)
 
