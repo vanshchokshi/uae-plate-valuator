@@ -1,6 +1,45 @@
+# Python Virtual Environments
 venv/
 backend/venv/
+.venv/
+env/
+
+# Environment Variables and Credentials
+.env
+.env.local
+.env.*.local
+*.env
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+!.env.example
+!*.env.example
+
+# Node / Frontend Dependencies & Expo
 node_modules/
 frontend/node_modules/
 .expo/
+frontend/.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Python Cache & Testing
 __pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Scraper & Temporary Debug Artifacts
+backend/debug.html
+backend/debug.png
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
