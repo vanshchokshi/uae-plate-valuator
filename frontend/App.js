@@ -29,6 +29,7 @@ export default function App() {
   const [selectedEmirate, setSelectedEmirate] = useState('Dubai');
   const [valCode, setValCode] = useState('');
   const [valPlate, setValPlate] = useState('');
+  const [checkLive, setCheckLive] = useState(false);
   const [valuationResult, setValuationResult] = useState(null);
   const [valLoading, setValLoading] = useState(false);
   const [valError, setValError] = useState('');
@@ -85,6 +86,7 @@ export default function App() {
           emirate: activeEmirate,
           code: activeCode,
           number: activePlate,
+          check_live: checkLive,
         }),
       });
 
@@ -226,6 +228,17 @@ export default function App() {
         />
       </View>
 
+      {/* Live Probe Toggle */}
+      <TouchableOpacity
+        style={[styles.liveToggleRow, checkLive && styles.liveToggleRowActive]}
+        onPress={() => setCheckLive(!checkLive)}
+      >
+        <View style={[styles.liveIndicatorDot, checkLive && styles.liveIndicatorDotActive]} />
+        <Text style={[styles.liveToggleText, checkLive && styles.liveToggleTextActive]}>
+          {checkLive ? "LIVE CRAWL ENABLED: PROBE EMIRATES AUCTION IF MISSING" : "QUICK VALUATION (INSTANT ARCHIVE < 1MS)"}
+        </Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={[styles.valButton, (!valCode || !valPlate) && styles.valButtonDisabled]}
         onPress={() => fetchValuation()}
@@ -234,7 +247,9 @@ export default function App() {
         {valLoading ? (
           <ActivityIndicator color="#000" size="small" />
         ) : (
-          <Text style={styles.valButtonText}>CALCULATE VALUATION</Text>
+          <Text style={styles.valButtonText}>
+            {checkLive ? "SEARCH LIVE & VALUATE" : "CALCULATE VALUATION"}
+          </Text>
         )}
       </TouchableOpacity>
 
@@ -454,6 +469,41 @@ const styles = StyleSheet.create({
   },
   codeInput: { flex: 0.38, marginRight: 10 },
   plateInput: { flex: 0.62 },
+
+  liveToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  liveToggleRowActive: {
+    borderColor: '#25D366',
+    backgroundColor: '#0F1A12',
+  },
+  liveIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#555',
+    marginRight: 8,
+  },
+  liveIndicatorDotActive: {
+    backgroundColor: '#25D366',
+  },
+  liveToggleText: {
+    color: '#888',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  liveToggleTextActive: {
+    color: '#25D366',
+  },
 
   valButton: {
     backgroundColor: '#E5A93C',

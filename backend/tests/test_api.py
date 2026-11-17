@@ -34,6 +34,24 @@ def test_evaluate_post():
     assert data["liquidation_value_aed"] < data["fair_market_value_aed"]
     assert data["dealer_ask_aed"] > data["fair_market_value_aed"]
     assert len(data["comps"]) > 0
+    assert data["is_live_listing"] is False
+
+def test_evaluate_with_check_live_flag():
+    payload = {
+        "emirate": "Dubai",
+        "code": "A",
+        "number": "1234",
+        "check_live": False
+    }
+    response = client.post("/v1/evaluate", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["fair_market_value_aed"] > 0
+
+def test_live_sync_endpoint():
+    response = client.post("/v1/live-sync")
+    assert response.status_code == 200
+    assert "synchronization initiated" in response.json()["status"]
 
 def test_valuate_get_backwards_compatible():
     response = client.get("/valuate?code=A&plate=77777&emirate=dubai")

@@ -1,16 +1,17 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from valuation import valuate
 from database import db
+from live_lookup import search_live_auction, probe_live_auction_inventory
 
 app = FastAPI(
     title="UAE Plate Valuation Engine",
-    description="Fintech-grade valuation engine and market comps intelligence for UAE license plates.",
-    version="2.1.0"
+    description="Fintech-grade valuation engine with on-demand live auction verification and SQLite comps intelligence.",
+    version="2.2.0"
 )
 
 # Open CORS configuration for Expo mobile and web clients
@@ -26,6 +27,7 @@ class PlateRequest(BaseModel):
     emirate: str = Field(default="Dubai", json_schema_extra={"example": "Dubai"})
     code: str = Field(..., json_schema_extra={"example": "A"})
     number: str = Field(..., json_schema_extra={"example": "333"})
+    check_live: bool = Field(default=False, description="Whether to probe live auction platforms if missing from DB")
 
 class AuctionComp(BaseModel):
     plate: str
@@ -45,6 +47,7 @@ class PlateResponse(BaseModel):
     dealer_ask_aed: int
     confidence_score: float
     comps: List[AuctionComp]
+    is_live_listing: bool = False
     # Backward compatibility fields
     estimated_value: int
     comparable_count: int
@@ -57,6 +60,15 @@ def health_check():
         "database": "sqlite",
         "comps_in_db": db.count_comps()
     }
+
+@app.post("/v1/live-sync")
+def trigger_live_sync(background_tasks: BackgroundTasks):
+    """
+    Trigger an on-demand background scan of Emirates Auction live active inventory
+    to discover and persist newly listed plates into the database.
+    """
+    background_tasks.add_task(probe_live_auction_inventory)
+    return {"status": "Live auction synchronization initiated in background."}
 
 @app.get("/comps")
 @app.get("/v1/comps")
@@ -74,8 +86,10 @@ def get_comps(
 @app.post("/v1/evaluate", response_model=PlateResponse)
 def evaluate_plate(payload: PlateRequest):
     """
-    Comprehensive valuation endpoint calculating Fair Market Value, Liquidation Value,
-    Dealer Ask Price, and identifying historical market comps and plate patterns.
+    Comprehensive valuation endpoint.
+    1. Checks local SQLite DB for exact auction record.
+    2. If missing, optionally probes live auction platforms (Emirates Auction).
+    3. If not found on live platforms, runs the heuristic valuation engine.
     """
     num = payload.number.strip()
     raw_code = payload.code.strip()
@@ -87,11 +101,25 @@ def evaluate_plate(payload: PlateRequest):
     if not raw_code:
         raise HTTPException(status_code=400, detail="Plate code or category is required.")
 
-    # 1. Check for exact historical auction comp in SQLite
     temp_display = f"{emirate.upper()} {raw_code.upper()} {num}"
+    is_live_listing = False
+
+    # 1. Check local SQLite database for exact historical auction comp
     exact_price = db.fetch_exact_match(temp_display)
 
-    # 2. Run heuristic valuation engine
+    # 2. If not found in DB, probe live auction inventory
+    if not exact_price:
+        live_result = search_live_auction(
+            emirate=emirate,
+            code=raw_code,
+            number=num,
+            allow_live_crawl=payload.check_live
+        )
+        if live_result:
+            exact_price = live_result.get("price_aed")
+            is_live_listing = True
+
+    # 3. Run heuristic valuation engine
     valuation_data = valuate(
         emirate=emirate,
         code=raw_code,
@@ -99,7 +127,11 @@ def evaluate_plate(payload: PlateRequest):
         exact_comp_price=exact_price
     )
 
-    # 3. Fetch nearest price comps
+    display_patterns = list(valuation_data["patterns"])
+    if is_live_listing:
+        display_patterns.insert(0, "Emirates Auction Live Active Listing")
+
+    # 4. Fetch nearest price comps
     matched_comps = db.fetch_nearest_comps(
         emirate=valuation_data["emirate"],
         digit_count=valuation_data["digit_count"],
@@ -123,12 +155,13 @@ def evaluate_plate(payload: PlateRequest):
         code=valuation_data["code"],
         number=valuation_data["number"],
         digit_count=valuation_data["digit_count"],
-        patterns=valuation_data["patterns"],
+        patterns=display_patterns,
         fair_market_value_aed=valuation_data["fair_market_value_aed"],
         liquidation_value_aed=valuation_data["liquidation_value_aed"],
         dealer_ask_aed=valuation_data["dealer_ask_aed"],
         confidence_score=valuation_data["confidence_score"],
         comps=comp_models,
+        is_live_listing=is_live_listing,
         estimated_value=valuation_data["fair_market_value_aed"],
         comparable_count=len(comp_models)
     )
@@ -137,11 +170,12 @@ def evaluate_plate(payload: PlateRequest):
 def valuate_plate_get(
     plate: str = Query(..., description="Plate number, e.g. 333 or 77777"),
     code: str = Query(..., description="Plate code, e.g. A, AA, or CAT 1"),
-    emirate: str = Query("dubai", description="Emirate name (dubai, abu dhabi, etc.)")
+    emirate: str = Query("dubai", description="Emirate name (dubai, abu dhabi, etc.)"),
+    check_live: bool = Query(False, description="Check live active auction inventory if missing from DB")
 ):
     """
     GET valuation endpoint providing complete backwards compatibility
     with mobile and web query parameters.
     """
-    req = PlateRequest(emirate=emirate, code=code, number=plate)
+    req = PlateRequest(emirate=emirate, code=code, number=plate, check_live=check_live)
     return evaluate_plate(req)
