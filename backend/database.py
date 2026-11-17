@@ -6,45 +6,12 @@ Fast, zero-config, embedded database for historical and live auction comps.
 import os
 import sqlite3
 from typing import List, Dict, Any, Optional
+from sources.aggregator import multi_source_aggregator
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "auctions.db")
 
-SEED_COMPS = [
-    ("dubai", 1, "DUBAI P 7", 55000000, "Apr 2023", "Most Noble Numbers"),
-    ("dubai", 1, "DUBAI AA 9", 38000000, "Apr 2021", "Most Noble Numbers"),
-    ("dubai", 1, "DUBAI AA 8", 35000000, "Apr 2022", "Most Noble Numbers"),
-    ("abu dhabi", 1, "ABU DHABI 2", 23300000, "Nov 2021", "Emirates Auction"),
-    ("abu dhabi", 1, "ABU DHABI 5", 25200000, "Nov 2020", "Emirates Auction"),
-    ("dubai", 2, "DUBAI AA 70", 3820000, "May 2022", "RTA Auction 110"),
-    ("dubai", 2, "DUBAI V 99", 4100000, "Dec 2023", "RTA Auction 114"),
-    ("dubai", 2, "DUBAI W 12", 2700000, "Sep 2023", "RTA Auction 113"),
-    ("abu dhabi", 2, "ABU DHABI CAT 1 77", 9150000, "Jun 2023", "Emirates Auction"),
-    ("abu dhabi", 2, "ABU DHABI CAT 50 11", 4600000, "Dec 2022", "Emirates Auction"),
-    ("abu dhabi", 2, "ABU DHABI CAT 4 22", 3100000, "Feb 2024", "Emirates Auction"),
-    ("dubai", 3, "DUBAI W 333", 720000, "Mar 2023", "RTA Auction 112"),
-    ("dubai", 3, "DUBAI Q 777", 850000, "Oct 2023", "RTA Auction 113"),
-    ("dubai", 3, "DUBAI J 1971", 1250000, "Nov 2022", "RTA Auction 111"),
-    ("dubai", 3, "DUBAI Z 786", 620000, "Jan 2024", "RTA Special Auction"),
-    ("abu dhabi", 3, "ABU DHABI CAT 1 111", 1100000, "Mar 2023", "Emirates Auction"),
-    ("abu dhabi", 3, "ABU DHABI CAT 4 500", 340000, "Oct 2023", "Emirates Auction"),
-    ("abu dhabi", 3, "ABU DHABI CAT 50 999", 780000, "Dec 2023", "Emirates Auction"),
-    ("dubai", 4, "DUBAI X 1000", 195000, "Feb 2024", "RTA Online Auction"),
-    ("dubai", 4, "DUBAI Z 9999", 210000, "Dec 2023", "RTA Online Auction"),
-    ("dubai", 4, "DUBAI AA 1212", 185000, "Jan 2024", "RTA Online Auction"),
-    ("abu dhabi", 4, "ABU DHABI CAT 50 7777", 260000, "Nov 2023", "Emirates Auction"),
-    ("abu dhabi", 4, "ABU DHABI CAT 1 1234", 180000, "Jan 2024", "Emirates Auction"),
-    ("abu dhabi", 4, "ABU DHABI CAT 4 8080", 95000, "Feb 2024", "Emirates Auction"),
-    ("dubai", 5, "DUBAI O 11111", 140000, "Jan 2024", "RTA Online Auction"),
-    ("dubai", 5, "DUBAI S 50000", 75000, "Mar 2024", "RTA Online Auction"),
-    ("dubai", 5, "DUBAI R 91191", 42000, "Feb 2024", "RTA Online Auction"),
-    ("dubai", 5, "DUBAI K 45892", 5200, "Mar 2024", "Dubizzle Verified"),
-    ("abu dhabi", 5, "ABU DHABI CAT 50 55555", 165000, "May 2023", "Emirates Auction"),
-    ("abu dhabi", 5, "ABU DHABI CAT 1 98989", 92000, "Feb 2024", "Emirates Auction"),
-    ("abu dhabi", 5, "ABU DHABI CAT 4 10000", 85000, "Dec 2023", "Emirates Auction"),
-]
-
 def init_sqlite():
-    """Ensure SQLite DB exists with schema, indexes, and curated benchmarks."""
+    """Ensure SQLite DB exists with schema, indexes, and multi-source benchmarks."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
@@ -63,11 +30,13 @@ def init_sqlite():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_comps_emirate_digits ON auction_comps(emirate, digit_count, price_aed)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_comps_plate ON auction_comps(plate)")
 
-    # Insert initial benchmark comps with INSERT OR IGNORE
+    # Seed multi-source benchmark comps from RTA, Emirates Auction, Dubizzle, and Luxury Dealerships
+    benchmarks = multi_source_aggregator.get_all_benchmark_comps(limit=100)
     cursor.executemany("""
         INSERT OR IGNORE INTO auction_comps (emirate, digit_count, plate, price_aed, date, source)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, SEED_COMPS)
+    """, [(b["emirate"], b["digit_count"], b["plate"], b["price_aed"], b["date"], b["source"]) for b in benchmarks])
+
     conn.commit()
     conn.close()
 
@@ -87,26 +56,34 @@ class DatabaseRepository:
         conn.close()
         return total
 
-    def get_comps(self, emirate: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fetch auction comps from SQLite."""
+    def count_by_source(self) -> List[Dict[str, Any]]:
+        """Return breakdown of records by source."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        if emirate:
-            cursor.execute("""
-                SELECT id, emirate, digit_count, plate, price_aed, date, source
-                FROM auction_comps
-                WHERE lower(emirate) = ?
-                ORDER BY id DESC
-                LIMIT ?
-            """, (emirate.lower(), limit))
-        else:
-            cursor.execute("""
-                SELECT id, emirate, digit_count, plate, price_aed, date, source
-                FROM auction_comps
-                ORDER BY id DESC
-                LIMIT ?
-            """, (limit,))
+        cursor.execute("SELECT source, COUNT(*) FROM auction_comps GROUP BY source ORDER BY COUNT(*) DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"source": r[0], "count": r[1]} for r in rows]
+
+    def get_comps(self, emirate: Optional[str] = None, source: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Fetch auction comps from SQLite with optional emirate and source filters."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
         
+        query = "SELECT id, emirate, digit_count, plate, price_aed, date, source FROM auction_comps WHERE 1=1"
+        params: List[Any] = []
+        
+        if emirate:
+            query += " AND lower(emirate) = ?"
+            params.append(emirate.lower())
+        if source:
+            query += " AND lower(source) LIKE ?"
+            params.append(f"%{source.lower()}%")
+            
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         conn.close()
         return [
@@ -122,14 +99,16 @@ class DatabaseRepository:
             for r in rows
         ]
 
-    def fetch_exact_match(self, plate_display: str) -> Optional[int]:
-        """Check for exact historical auction comp for this plate."""
+    def fetch_exact_match(self, plate_display: str) -> Optional[Dict[str, Any]]:
+        """Check for exact comp across database for this plate."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        cursor.execute("SELECT price_aed FROM auction_comps WHERE upper(plate) = ?", (plate_display.upper(),))
+        cursor.execute("SELECT price_aed, date, source FROM auction_comps WHERE upper(plate) = ?", (plate_display.upper(),))
         row = cursor.fetchone()
         conn.close()
-        return row[0] if row else None
+        if row:
+            return {"price_aed": row[0], "date": row[1], "source": row[2]}
+        return None
 
     def fetch_nearest_comps(
         self,

@@ -267,6 +267,14 @@ export default function App() {
             </View>
           </View>
 
+          {valuationResult.matched_source && (
+            <View style={styles.sourceMatchBadge}>
+              <Text style={styles.sourceMatchBadgeText}>
+                GROUND TRUTH: {valuationResult.matched_source.toUpperCase()}
+              </Text>
+            </View>
+          )}
+
           {/* Pattern Recognition Tags */}
           <View style={styles.patternsWrapper}>
             {valuationResult.patterns.map((pat, idx) => (
@@ -550,6 +558,22 @@ const styles = StyleSheet.create({
   confidenceText: {
     color: '#E5A93C',
     fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  sourceMatchBadge: {
+    backgroundColor: '#0F1A12',
+    borderWidth: 1,
+    borderColor: '#25D366',
+    borderRadius: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  sourceMatchBadgeText: {
+    color: '#25D366',
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
   },

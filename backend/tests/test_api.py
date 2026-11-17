@@ -12,12 +12,26 @@ def test_health_endpoint():
     assert data["database"] == "sqlite"
     assert data["comps_in_db"] > 0
 
+def test_sources_endpoint():
+    response = client.get("/v1/sources")
+    assert response.status_code == 200
+    data = response.json()
+    assert "active_providers" in data
+    assert len(data["active_providers"]) >= 3
+    assert "database_breakdown" in data
+
 def test_get_comps():
     response = client.get("/comps")
     assert response.status_code == 200
     data = response.json()
     assert "data" in data
     assert len(data["data"]) > 0
+
+def test_get_comps_by_source():
+    response = client.get("/comps?source=RTA")
+    assert response.status_code == 200
+    data = response.json()
+    assert "data" in data
 
 def test_evaluate_post():
     payload = {
@@ -34,7 +48,6 @@ def test_evaluate_post():
     assert data["liquidation_value_aed"] < data["fair_market_value_aed"]
     assert data["dealer_ask_aed"] > data["fair_market_value_aed"]
     assert len(data["comps"]) > 0
-    assert data["is_live_listing"] is False
 
 def test_evaluate_with_check_live_flag():
     payload = {

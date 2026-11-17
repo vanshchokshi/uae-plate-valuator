@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -7,11 +7,12 @@ from pydantic import BaseModel, Field
 from valuation import valuate
 from database import db
 from live_lookup import search_live_auction, probe_live_auction_inventory
+from sources.aggregator import multi_source_aggregator
 
 app = FastAPI(
     title="UAE Plate Valuation Engine",
-    description="Fintech-grade valuation engine with on-demand live auction verification and SQLite comps intelligence.",
-    version="2.2.0"
+    description="Multi-source market intelligence engine cross-referencing Dubai RTA, Emirates Auction, Dubizzle, and verified dealerships.",
+    version="2.3.0"
 )
 
 # Open CORS configuration for Expo mobile and web clients
@@ -47,6 +48,7 @@ class PlateResponse(BaseModel):
     dealer_ask_aed: int
     confidence_score: float
     comps: List[AuctionComp]
+    matched_source: Optional[str] = None
     is_live_listing: bool = False
     # Backward compatibility fields
     estimated_value: int
@@ -54,11 +56,21 @@ class PlateResponse(BaseModel):
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint reporting SQLite database metrics."""
+    """Health check endpoint reporting SQLite database metrics and total comps."""
     return {
         "status": "healthy",
         "database": "sqlite",
         "comps_in_db": db.count_comps()
+    }
+
+@app.get("/sources")
+@app.get("/v1/sources")
+def list_sources():
+    """List all connected market data sources and database records breakdown."""
+    return {
+        "active_providers": multi_source_aggregator.list_sources(),
+        "database_breakdown": db.count_by_source(),
+        "total_comps": db.count_comps()
     }
 
 @app.post("/v1/live-sync")
@@ -73,12 +85,13 @@ def trigger_live_sync(background_tasks: BackgroundTasks):
 @app.get("/comps")
 @app.get("/v1/comps")
 def get_comps(
-    emirate: Optional[str] = Query(None, description="Optional filter by emirate (e.g. dubai, abu dhabi)"),
+    emirate: Optional[str] = Query(None, description="Optional filter by emirate (e.g. dubai, abu dhabi, sharjah)"),
+    source: Optional[str] = Query(None, description="Optional filter by source (e.g. RTA, Emirates Auction, Dubizzle)"),
     limit: int = Query(50, ge=1, le=100)
 ):
-    """Retrieve historical and live auction comparable records."""
+    """Retrieve historical and live auction comparable records across all sources."""
     try:
-        data = db.get_comps(emirate=emirate, limit=limit)
+        data = db.get_comps(emirate=emirate, source=source, limit=limit)
         return {"data": data, "count": len(data), "database": "sqlite"}
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to retrieve auction comps.")
@@ -86,10 +99,10 @@ def get_comps(
 @app.post("/v1/evaluate", response_model=PlateResponse)
 def evaluate_plate(payload: PlateRequest):
     """
-    Comprehensive valuation endpoint.
-    1. Checks local SQLite DB for exact auction record.
-    2. If missing, optionally probes live auction platforms (Emirates Auction).
-    3. If not found on live platforms, runs the heuristic valuation engine.
+    Comprehensive multi-source valuation endpoint.
+    1. Cross-references SQLite database for exact comp across RTA, Emirates Auction & Dealerships.
+    2. Checks live auction platforms (Emirates Auction) if live probe requested.
+    3. Runs heuristic valuation engine and retrieves nearest benchmark comps.
     """
     num = payload.number.strip()
     raw_code = payload.code.strip()
@@ -102,21 +115,33 @@ def evaluate_plate(payload: PlateRequest):
         raise HTTPException(status_code=400, detail="Plate code or category is required.")
 
     temp_display = f"{emirate.upper()} {raw_code.upper()} {num}"
+    exact_price = None
+    matched_source = None
     is_live_listing = False
 
-    # 1. Check local SQLite database for exact historical auction comp
-    exact_price = db.fetch_exact_match(temp_display)
+    # 1. Check local multi-source database for exact match
+    exact_comp = db.fetch_exact_match(temp_display)
+    if exact_comp:
+        exact_price = exact_comp["price_aed"]
+        matched_source = exact_comp["source"]
+    else:
+        # Check providers directly
+        multi_match = multi_source_aggregator.search_all_sources(emirate, raw_code, num)
+        if multi_match:
+            exact_price = multi_match["price_aed"]
+            matched_source = multi_match["source"]
 
-    # 2. If not found in DB, probe live auction inventory
-    if not exact_price:
+    # 2. If not found in static records and live crawl requested, probe live auction inventory
+    if not exact_price and payload.check_live:
         live_result = search_live_auction(
             emirate=emirate,
             code=raw_code,
             number=num,
-            allow_live_crawl=payload.check_live
+            allow_live_crawl=True
         )
         if live_result:
             exact_price = live_result.get("price_aed")
+            matched_source = live_result.get("source", "Emirates Auction Live Active")
             is_live_listing = True
 
     # 3. Run heuristic valuation engine
@@ -128,11 +153,13 @@ def evaluate_plate(payload: PlateRequest):
     )
 
     display_patterns = list(valuation_data["patterns"])
-    if is_live_listing:
+    if matched_source:
+        display_patterns.insert(0, f"Source Verified: {matched_source}")
+    elif is_live_listing:
         display_patterns.insert(0, "Emirates Auction Live Active Listing")
 
-    # 4. Fetch nearest price comps
-    matched_comps = db.fetch_nearest_comps(
+    # 4. Fetch nearest price comps from multi-source database
+    nearest_comps = db.fetch_nearest_comps(
         emirate=valuation_data["emirate"],
         digit_count=valuation_data["digit_count"],
         target_price=valuation_data["fair_market_value_aed"],
@@ -146,7 +173,7 @@ def evaluate_plate(payload: PlateRequest):
             date=c["date"],
             source=c["source"]
         )
-        for c in matched_comps
+        for c in nearest_comps
     ]
 
     return PlateResponse(
@@ -161,6 +188,7 @@ def evaluate_plate(payload: PlateRequest):
         dealer_ask_aed=valuation_data["dealer_ask_aed"],
         confidence_score=valuation_data["confidence_score"],
         comps=comp_models,
+        matched_source=matched_source,
         is_live_listing=is_live_listing,
         estimated_value=valuation_data["fair_market_value_aed"],
         comparable_count=len(comp_models)

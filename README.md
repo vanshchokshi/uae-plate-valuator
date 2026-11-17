@@ -1,6 +1,24 @@
-# UAE Plate Valuator: Market Intelligence Engine
+# UAE Plate Valuator: Multi-Source Market Intelligence Engine
 
-A full-stack market intelligence platform designed to calculate the **Fair Market Value**, **Liquidation Value** (instant cash/pawn), and **Dealer Ask Price** (retail showroom) of UAE vehicle license plates. The engine combines heuristic pattern-recognition algorithms with a live automated data pipeline scraping real-time auction comps to anchor pricing models.
+A full-stack market intelligence platform designed to calculate the **Fair Market Value**, **Liquidation Value** (instant cash/pawn), and **Dealer Ask Price** (retail showroom) of UAE vehicle license plates. 
+
+The engine cross-references across multiple verified tiers: **Dubai RTA Official Auctions**, **Emirates Auction (Abu Dhabi/Sharjah Police)**, and **Verified Dealerships (Dubizzle / Alain Class / Pearl Motors)** alongside heuristic pattern-recognition algorithms to anchor pricing models.
+
+---
+
+## Verified Market Data Sources
+
+The platform implements a modular **Multi-Source Aggregator** (`backend/sources/`):
+
+1. **Official Government Auctions (`official_government`)**:
+   * **Dubai RTA Grand & Online Auctions**: Quarterly historical clearing prices (Auctions 105 through 115).
+   * **"Most Noble Numbers" Royal Charity Auctions**: Benchmark world-record sales (e.g. `P 7` for 55M AED, `AA 9` for 38M AED).
+2. **Authorized Auction Concessionaires (`concessionaire`)**:
+   * **Emirates Auction**: Official contracted auctioneer for Abu Dhabi Police, Sharjah Police, Ras Al Khaimah, Fujairah, and Ajman courts.
+   * Includes automated headless scraper pipeline for real-time live bid detection.
+3. **Verified Dealer Marketplace (`dealer_marketplace`)**:
+   * **Dubizzle Verified Transactions**: Active secondary market transactions.
+   * **Licensed Luxury Showrooms**: Consignment showroom ask prices from Al Aweer and Sheikh Zayed Road (Alain Class Motors, Pearl Motors, Deals on Wheels, VIP Number Plates UAE).
 
 ---
 
@@ -8,8 +26,9 @@ A full-stack market intelligence platform designed to calculate the **Fair Marke
 
 * **Client / Frontend:** React Native (Expo SDK 52+)
 * **API / Backend:** FastAPI (Python 3.11+)
-* **Database:** Embedded SQLite (`auctions.db`) — self-contained, zero-config, sub-millisecond query performance
-* **Data Pipeline:** Playwright (Headless Chromium)
+* **Database:** Embedded SQLite (`auctions.db`) with composite indexes on `(emirate, digit_count, price_aed)` and `(plate)`
+* **Data Sources:** Multi-Source Provider Framework (`backend/sources/`)
+* **Scraper Pipeline:** Playwright (Headless Chromium)
 * **Agent Integration:** FastMCP Server (`mcp_server.py`)
 * **CI/CD:** GitHub Actions (Automated testing & scraper pipeline)
 
@@ -29,11 +48,11 @@ UAE plate pricing is driven by digit brevity, cultural significance, sequence re
   * **Cultural & National Match:** `786` (Bismillah cultural premium), `1971` (UAE Year of Federation), `50` (Golden Jubilee)
   * **Automotive Model Matches:** `911`, `488`, `720`, `812`, `63`, `55`, etc.
 * **Emirate & Code Multipliers:** Weighted factors across Dubai, Abu Dhabi (Categories 1, 2, 50), Sharjah, and Northern Emirates.
-* **Market Anchoring:** Algorithmic outputs are cross-referenced against historical auction transactions to anchor pricing to verified real-world comps.
+* **Multi-Source Market Anchoring:** Algorithmic outputs are cross-referenced against historical auction transactions to anchor pricing to verified real-world comps.
 
 ### 2. High-Performance Embedded Database (SQLite)
-* Self-contained in `backend/auctions.db` with indexed lookups on `(emirate, digit_count, price_aed)` and `(plate)`.
-* Zero external cloud services, API tokens, or setup required. Pre-seeded with 31 verified UAE auction benchmarks across Dubai and Abu Dhabi.
+* Self-contained in `backend/auctions.db`.
+* Zero external cloud services, API tokens, or setup required. Pre-seeded with 100+ verified UAE auction and dealership benchmarks across Dubai, Abu Dhabi, and Sharjah.
 * Sub-millisecond query response time (< 1ms).
 
 ### 3. Automated Data Pipeline & Scraper
@@ -45,6 +64,7 @@ UAE plate pricing is driven by digit brevity, cultural significance, sequence re
 * **Multi-Emirate Support:** One-tap toggle between Dubai, Abu Dhabi, and Sharjah.
 * **Edge Caching:** `AsyncStorage` persists recent searches for instant 1-tap re-valuation.
 * **Brokerage Deep-Linking:** Direct WhatsApp lead generation deep linking.
+* **Live Crawl Toggle:** Optional on-demand live probe against active auction inventory.
 
 ---
 
@@ -64,6 +84,11 @@ To run the API server:
 uvicorn main:app --reload --port 8000
 ```
 Interactive API docs available at: `http://localhost:8000/docs`
+
+To inspect connected market data sources:
+```powershell
+curl http://localhost:8000/v1/sources
+```
 
 To run the automated test suite:
 ```powershell
