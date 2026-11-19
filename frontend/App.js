@@ -212,19 +212,33 @@ export default function App() {
           placeholder={selectedEmirate === 'Abu Dhabi' ? 'CAT (1-50)' : 'CODE (A-Z)'}
           placeholderTextColor="#666"
           value={valCode}
-          onChangeText={setValCode}
+          onChangeText={(text) => {
+            const formatted = selectedEmirate === 'Abu Dhabi'
+              ? text.replace(/[^0-9]/g, '')
+              : text.toUpperCase().replace(/[^A-Z]/g, '');
+            setValCode(formatted);
+          }}
           autoCapitalize="characters"
+          autoCorrect={false}
+          spellCheck={false}
           keyboardType={selectedEmirate === 'Abu Dhabi' ? 'numeric' : 'default'}
           maxLength={selectedEmirate === 'Abu Dhabi' ? 3 : 2}
+          returnKeyType="next"
         />
         <TextInput
           style={[styles.input, styles.plateInput]}
           placeholder="PLATE NUMBER (e.g. 786, 77777)"
           placeholderTextColor="#666"
           value={valPlate}
-          onChangeText={setValPlate}
+          onChangeText={(text) => {
+            setValPlate(text.replace(/[^0-9]/g, ''));
+          }}
           keyboardType="numeric"
+          autoCorrect={false}
+          spellCheck={false}
           maxLength={5}
+          returnKeyType="go"
+          onSubmitEditing={() => fetchValuation()}
         />
       </View>
 
@@ -412,13 +426,10 @@ export default function App() {
             <ActivityIndicator size="large" color="#E5A93C" />
           </View>
         ) : (
-          <FlatList
-            data={plates}
-            keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString())}
-            renderItem={renderPlateCard}
-            ListHeaderComponent={renderValuationSection}
+          <ScrollView
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -427,12 +438,21 @@ export default function App() {
                 colors={['#E5A93C']}
               />
             }
-            ListEmptyComponent={
+          >
+            {renderValuationSection()}
+
+            {plates.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No comparable auction records found for {selectedEmirate}.</Text>
               </View>
-            }
-          />
+            ) : (
+              plates.map((item, index) => (
+                <View key={item.id ? `comp-${item.id}` : `comp-${index}`}>
+                  {renderPlateCard({ item })}
+                </View>
+              ))
+            )}
+          </ScrollView>
         )}
       </SafeAreaView>
     </SafeAreaProvider>
@@ -442,11 +462,25 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { alignItems: 'center', marginTop: 16, marginBottom: 20, paddingHorizontal: 20 },
+  header: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+  },
   logo: { fontSize: 20, fontWeight: '900', color: '#FFF', letterSpacing: 3 },
   subtitle: { fontSize: 10, color: '#E5A93C', letterSpacing: 2, marginTop: 4, fontWeight: '700' },
 
-  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+  },
 
   // Emirate Tabs
   emirateTabs: {
@@ -491,6 +525,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     fontWeight: '700',
+    outlineStyle: 'none',
   },
   codeInput: { flex: 0.38, marginRight: 10 },
   plateInput: { flex: 0.62 },
