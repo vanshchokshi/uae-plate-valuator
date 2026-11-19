@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   TextInput,
   Linking,
-  ScrollView
+  ScrollView,
+  useWindowDimensions,
+  Platform
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +23,9 @@ const RECENT_SEARCHES_STORAGE_KEY = '@uae_plate_recent_searches_v2';
 const BROKER_WHATSAPP_NUMBER = '971561294412'; // UAE brokerage inquiry hotline
 
 export default function App() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 600;
+
   const [plates, setPlates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,7 +278,12 @@ export default function App() {
       {valuationResult && (
         <View style={styles.valResultCard}>
           <View style={styles.resultHeader}>
-            <Text style={styles.resultPlateDisplay}>{valuationResult.plate_display}</Text>
+            <Text
+              style={[styles.resultPlateDisplay, isMobile && { fontSize: 14, flex: 1, marginRight: 6 }]}
+              numberOfLines={1}
+            >
+              {valuationResult.plate_display}
+            </Text>
             <View style={styles.headerBadgesRow}>
               <View style={styles.confidenceBadge}>
                 <Text style={styles.confidenceText}>
@@ -310,7 +320,11 @@ export default function App() {
             <Text style={styles.heroPriceLabel}>
               FAIR MARKET VALUE {valuationResult.appreciation_adjusted ? "(2026 INDEXED)" : ""}
             </Text>
-            <Text style={styles.heroPriceValue}>
+            <Text
+              style={[styles.heroPriceValue, isMobile && { fontSize: 28 }]}
+              adjustsFontSizeToFit={true}
+              numberOfLines={1}
+            >
               <Text style={styles.currency}>AED </Text>
               {formatAED(valuationResult.fair_market_value_aed)}
             </Text>
@@ -396,7 +410,13 @@ export default function App() {
 
         <View style={styles.platePreview}>
           <Text style={styles.plateHeader}>{(item.emirate || 'DUBAI').toUpperCase()}</Text>
-          <Text style={styles.plateNumber}>{cleanPlateDisplay || rawPlate}</Text>
+          <Text
+            style={[styles.plateNumber, isMobile && { fontSize: 26 }]}
+            adjustsFontSizeToFit={true}
+            numberOfLines={1}
+          >
+            {cleanPlateDisplay || rawPlate}
+          </Text>
         </View>
 
         <View style={styles.cardFooter}>
@@ -472,23 +492,27 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    ...(Platform.OS === 'web' ? { minHeight: '100vh' } : {}),
+  },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 16,
     width: '100%',
     maxWidth: 680,
     alignSelf: 'center',
   },
-  logo: { fontSize: 20, fontWeight: '900', color: '#FFF', letterSpacing: 3 },
+  logo: { fontSize: 20, fontWeight: '900', color: '#FFF', letterSpacing: 2 },
   subtitle: { fontSize: 10, color: '#E5A93C', letterSpacing: 2, marginTop: 4, fontWeight: '700' },
 
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 60,
     width: '100%',
     maxWidth: 680,
     alignSelf: 'center',
@@ -533,9 +557,9 @@ const styles = StyleSheet.create({
     borderColor: '#2A2A2A',
     borderRadius: 10,
     color: '#FFF',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     outlineStyle: 'none',
   },
@@ -596,7 +620,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#E5A93C',
-    padding: 20,
+    padding: 16,
     marginBottom: 20,
   },
   resultHeader: {
