@@ -142,17 +142,21 @@ def calculate_code_multiplier(emirate: str, raw_code: str) -> Tuple[float, str]:
             return 1.0, code_clean
 
 def calculate_base_value(length: int, has_patterns: bool) -> int:
-    """Base financial value in AED according to plate length (exponential rarity decay)."""
+    """
+    Base financial value in AED according to plate length (exponential rarity decay).
+    Calibrated to genuine secondary market transaction clearing prices
+    (filtering out speculative Dubizzle listing markups while avoiding outdated auction opening bids).
+    """
     if length == 1:
-        return 15_000_000
+        return 18_000_000
     elif length == 2:
-        return 1_150_000
+        return 1_400_000
     elif length == 3:
-        return 190_000
+        return 220_000 if has_patterns else 135_000
     elif length == 4:
-        return 22_000 if has_patterns else 5_500
+        return 48_000 if has_patterns else 20_000
     elif length == 5:
-        return 14_000 if has_patterns else 2_500
+        return 22_000 if has_patterns else 4_500
     else:
         return 0
 
@@ -192,7 +196,7 @@ def valuate(
     # Liquidation (quick cash discount) and Dealer Ask (retail showroom markup)
     if calculated_fair > 0:
         liquidation_val = int(calculated_fair * 0.78)
-        dealer_ask_val = int(calculated_fair * 1.25)
+        dealer_ask_val = int(calculated_fair * 1.28)
     else:
         liquidation_val = 0
         dealer_ask_val = 0

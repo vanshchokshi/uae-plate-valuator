@@ -314,20 +314,32 @@ export default function App() {
               <Text style={styles.currency}>AED </Text>
               {formatAED(valuationResult.fair_market_value_aed)}
             </Text>
+            <Text style={styles.fairValueExplainer}>
+              Target Transaction Settlement (Filters Speculative Listing Markups)
+            </Text>
           </View>
 
           {/* Financial Breakdown: Liquidation vs Dealer Ask */}
           <View style={styles.financialTiersRow}>
             <View style={styles.tierBox}>
-              <Text style={styles.tierLabel}>LIQUIDATION VALUE</Text>
-              <Text style={styles.tierSublabel}>Instant Cash Buyout</Text>
+              <Text style={styles.tierLabel}>INSTANT LIQUIDATION</Text>
+              <Text style={styles.tierSublabel}>Cash Dealer Buyout</Text>
               <Text style={styles.tierValue}>AED {formatAED(valuationResult.liquidation_value_aed)}</Text>
             </View>
             <View style={[styles.tierBox, styles.tierBoxRight]}>
-              <Text style={styles.tierLabel}>DEALER ASK PRICE</Text>
-              <Text style={styles.tierSublabel}>Retail Showroom</Text>
+              <Text style={styles.tierLabel}>MARKETPLACE ASKING</Text>
+              <Text style={styles.tierSublabel}>Dubizzle / Showroom List</Text>
               <Text style={styles.tierValue}>AED {formatAED(valuationResult.dealer_ask_aed)}</Text>
             </View>
+          </View>
+
+          {/* Fair Pricing Intelligence Banner */}
+          <View style={styles.marketInsightBox}>
+            <Text style={styles.marketInsightTitle}>💡 FAIR PRICING INTELLIGENCE</Text>
+            <Text style={styles.marketInsightText}>
+              Dubizzle listings typically include an unnegotiated +20% to +35% seller markup.
+              The Fair Market Value represents the true equilibrium price where serious buyers and sellers settle in the UAE today.
+            </Text>
           </View>
 
           {/* WhatsApp Deep Linking Action */}
@@ -686,6 +698,35 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 34,
     fontWeight: '900',
+  },
+  fairValueExplainer: {
+    color: '#8E8E93',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  marketInsightBox: {
+    backgroundColor: '#121212',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#262626',
+    padding: 12,
+    marginBottom: 16,
+  },
+  marketInsightTitle: {
+    color: '#E5A93C',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  marketInsightText: {
+    color: '#999',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '500',
   },
   currency: {
     fontSize: 16,

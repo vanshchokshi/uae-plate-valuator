@@ -96,7 +96,7 @@ def generate_expanded_dataset() -> List[Dict[str, Any]]:
             "emirate": emirate,
             "digit_count": 3,
             "plate": val["plate_display"],
-            "price_aed": max(price, 85000),
+            "price_aed": max(price, 110000),
             "date": date,
             "source": source
         })
@@ -127,7 +127,7 @@ def generate_expanded_dataset() -> List[Dict[str, Any]]:
             "emirate": emirate,
             "digit_count": 4,
             "plate": val["plate_display"],
-            "price_aed": max(price, 4500),
+            "price_aed": max(price, 16000),
             "date": date,
             "source": source
         })
@@ -157,7 +157,7 @@ def generate_expanded_dataset() -> List[Dict[str, Any]]:
             "emirate": emirate,
             "digit_count": 5,
             "plate": val["plate_display"],
-            "price_aed": max(price, 3200),
+            "price_aed": max(price, 3800),
             "date": date,
             "source": source
         })
