@@ -18,7 +18,7 @@ import { API_BASE_URL } from './src/config';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah'];
 const RECENT_SEARCHES_STORAGE_KEY = '@uae_plate_recent_searches_v2';
-const BROKER_WHATSAPP_NUMBER = '971500000000'; // UAE brokerage inquiry hotline
+const BROKER_WHATSAPP_NUMBER = '971561294412'; // UAE brokerage inquiry hotline
 
 export default function App() {
   const [plates, setPlates] = useState([]);
