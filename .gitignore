@@ -22,6 +22,7 @@ frontend/node_modules/
 .expo/
 frontend/.expo/
 dist/
+frontend/dist/
 web-build/
 *.tsbuildinfo
 
